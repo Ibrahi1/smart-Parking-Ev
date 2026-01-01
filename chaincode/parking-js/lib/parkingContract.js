@@ -213,7 +213,7 @@ class ParkingContract extends Contract {
         
         // Create reservation record
         const txTimestamp = ctx.stub.getTxTimestamp();
-        const reservationId = `RES-${ctx.clientIdentity.getID()}-${txTimestamp.seconds.toNumber()}-${txTimestamp.nanos}`;
+        const reservationId = `RES-${txTimestamp.seconds.toNumber()}-${txTimestamp.nanos}`;
         const reservation = {
             reservationId,
             carId,

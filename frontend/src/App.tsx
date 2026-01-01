@@ -341,6 +341,7 @@ function App() {
 
     setLoading(true);
     try {
+      console.log('Calling endParking API with reservationId:', reservationId);
       await reservationAPI.endParking(reservationId);
       await refreshPlaces();
       await refreshReservations();
@@ -348,6 +349,33 @@ function App() {
     } catch (error: any) {
       console.error('Error ending parking:', error);
       alert(`Failed to end parking: ${error.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCarClick = async (car: Car) => {
+    setLoading(true);
+    try {
+      // Refresh reservations to ensure we have the latest data
+      await refreshReservations();
+      
+      console.log('Current reservations:', reservations);
+      console.log('Clicked car:', car);
+      
+      // Find the active reservation for this car
+      const activeReservation = reservations.find(r => r.carId === car.carId && r.active);
+      console.log('Active reservation found:', activeReservation);
+      
+      if (activeReservation) {
+        console.log('Ending parking for reservation:', activeReservation.reservationId);
+        await handleRemoveCar(activeReservation.reservationId);
+      } else {
+        alert(`Car ${car.carId} is not currently parked.`);
+      }
+    } catch (error) {
+      console.error('Error handling car click:', error);
+      alert('Failed to process car click. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -422,7 +450,7 @@ function App() {
         </div>
 
         <div style={styles.centerPanel}>
-          <ParkingLot3D places={filteredPlaces} cars={filterCars} reservations={reservations} />
+          <ParkingLot3D places={filteredPlaces} cars={filterCars} reservations={reservations} onCarClick={handleCarClick} />
         </div>
 
         <div style={styles.rightPanel}>

@@ -111,10 +111,12 @@ interface CarModelProps {
   car: Car;
   position: [number, number, number];
   targetPosition?: [number, number, number];
+  onClick?: () => void;
 }
 
-const CarModel: React.FC<CarModelProps> = ({ car, position, targetPosition }) => {
+const CarModel: React.FC<CarModelProps> = ({ car, position, targetPosition, onClick }) => {
   const meshRef = useRef<THREE.Group>(null);
+  const [hovered, setHovered] = useState(false);
 
   useFrame((_state) => {
     if (meshRef.current && targetPosition) {
@@ -139,9 +141,16 @@ const CarModel: React.FC<CarModelProps> = ({ car, position, targetPosition }) =>
   return (
     <group ref={meshRef} position={position}>
       {/* Car body */}
-      <mesh position={[0, 0.3, 0]}>
+      <mesh 
+        position={[0, 0.3, 0]}
+        onClick={onClick}
+        onPointerOver={() => setHovered(true)}
+        onPointerOut={() => setHovered(false)}
+      >
         <boxGeometry args={[0.8, 0.4, 1.4]} />
-        <meshStandardMaterial color={car.evCompatible ? '#2196f3' : '#607d8b'} />
+        <meshStandardMaterial 
+          color={hovered ? '#ffeb3b' : (car.evCompatible ? '#2196f3' : '#607d8b')} 
+        />
       </mesh>
       
       {/* Car top */}
@@ -187,9 +196,10 @@ interface ParkingLot3DProps {
   cars: Car[];
   reservations: Reservation[];
   onPlaceClick?: (place: Place) => void;
+  onCarClick?: (car: Car) => void;
 }
 
-const ParkingLot3D: React.FC<ParkingLot3DProps> = ({ places, cars, reservations, onPlaceClick }) => {
+const ParkingLot3D: React.FC<ParkingLot3DProps> = ({ places, cars, reservations, onPlaceClick, onCarClick }) => {
   const calculatePosition = (index: number): [number, number, number] => {
     const row = Math.floor(index / 5);
     const col = index % 5;
@@ -288,6 +298,7 @@ const ParkingLot3D: React.FC<ParkingLot3DProps> = ({ places, cars, reservations,
             car={car}
             position={pos}
             targetPosition={targetPos}
+            onClick={() => onCarClick && onCarClick(car)}
           />
         );
       })}
