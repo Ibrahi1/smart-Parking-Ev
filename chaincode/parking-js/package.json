@@ -1,0 +1,23 @@
+{
+  "name": "parking-chaincode",
+  "version": "1.0.0",
+  "description": "Smart Parking & EV Charging Chaincode",
+  "main": "index.js",
+  "scripts": {
+    "test": "mocha test/**/*.test.js --timeout 10000",
+    "start": "fabric-chaincode-node start"
+  },
+  "dependencies": {
+    "fabric-contract-api": "^2.5.0",
+    "fabric-shim": "^2.5.0"
+  },
+  "devDependencies": {
+    "chai": "^4.3.7",
+    "mocha": "^10.2.0",
+    "sinon": "^15.0.1",
+    "sinon-chai": "^3.7.0"
+  },
+  "engines": {
+    "node": ">=16"
+  }
+}

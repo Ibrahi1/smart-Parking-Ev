@@ -1,0 +1,54 @@
+version: '3.8'
+
+services:
+  # Backend Service
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: smart-parking-backend
+    ports:
+      - "3001:3001"
+    environment:
+      - NODE_ENV=development
+      - PORT=3001
+      - CHANNEL_NAME=mychannel
+      - CHAINCODE_NAME=parking
+      - FABRIC_CFG_PATH=../fabric-samples/config
+      - CORE_PEER_ADDRESS=localhost:7051
+      - CORE_PEER_LOCALMSPID=Org1MSP
+      - CORE_PEER_MSPCONFIGPATH=../fabric-samples/test-network/organizations/peerOrganizations/org1.example.com/users/Admin@org1.example.com/msp
+      - CORE_PEER_TLS_ENABLED=true
+      - CORE_PEER_TLS_ROOTCERT_FILE=../fabric-samples/test-network/organizations/peerOrganizations/org1.example.com/peers/peer0.org1.example.com/tls/ca.crt
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+      - ./scripts/fabric-samples:/fabric-samples
+    networks:
+      - smart-parking-network
+    restart: unless-stopped
+
+  # Frontend Service
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: smart-parking-frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - VITE_API_URL=http://localhost:3001/api
+      - VITE_SOCKET_URL=http://localhost:3001
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    networks:
+      - smart-parking-network
+    restart: unless-stopped
+
+networks:
+  smart-parking-network:
+    driver: bridge
+
+# Note: Make sure Fabric network is running before starting these containers
+# Run: cd scripts/fabric-samples/test-network && ./network.sh up createChannel -c mychannel && ./network.sh deployCC -ccn parking -ccl javascript -ccp ../../chaincode/parking-js

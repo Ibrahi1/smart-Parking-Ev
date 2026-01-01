@@ -1,0 +1,28 @@
+{
+  "name": "smart-parking-ev",
+  "version": "1.0.0",
+  "description": "Smart Parking & EV Charging with Hyperledger Fabric",
+  "private": true,
+  "scripts": {
+    "setup": "cd scripts && chmod +x *.sh && ./start-network.sh",
+    "backend:install": "cd backend && npm install",
+    "frontend:install": "cd frontend && npm install",
+    "chaincode:test": "cd chaincode/parking-js && npm install && npm test",
+    "install:all": "npm run chaincode:test && npm run backend:install && npm run frontend:install",
+    "dev:backend": "cd backend && npm run dev",
+    "dev:frontend": "cd frontend && npm run dev",
+    "load-test": "cd scripts && node load-test.js",
+    "simulate-attacks": "cd scripts && node simulate-attacks.js",
+    "network:down": "cd fabric-samples/test-network && ./network.sh down",
+    "clean": "npm run network:down && docker volume prune -f && docker network prune -f"
+  },
+  "keywords": [
+    "blockchain",
+    "hyperledger-fabric",
+    "smart-parking",
+    "ev-charging",
+    "javascript-chaincode"
+  ],
+  "author": "",
+  "license": "MIT"
+}
