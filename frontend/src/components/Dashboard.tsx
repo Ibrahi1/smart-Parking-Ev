@@ -15,11 +15,11 @@ interface DashboardProps {
     lastBlockNumber?: number;
   };
   onUpdate: () => void; // Callback to refresh data
-  onRemoveCar?: (reservationId: string) => void;
+  onDeleteCar?: (carId: string) => void;
   loading?: boolean;
 }
 
-const Dashboard: React.FC<DashboardProps> = ({ transactions, reservations, parkings, places, selectedParkingId, onSelectParking, metrics, onRemoveCar, loading = false }) => {
+const Dashboard: React.FC<DashboardProps> = ({ transactions, reservations, parkings, places, selectedParkingId, onSelectParking, metrics, onDeleteCar, loading = false }) => {
 
   const availablePlaces = places.filter(place => place.status === 'free').length;
   const occupiedPlaces = places.filter(place => place.status === 'occupied').length;
@@ -116,20 +116,20 @@ const Dashboard: React.FC<DashboardProps> = ({ transactions, reservations, parki
 
       {/* Reservations Section */}
       <div style={styles.reservationsSection}>
-        <h3 style={styles.sectionTitle}>Active Reservations ({reservations.filter(r => r.active).length})</h3>
+        <h3 style={styles.sectionTitle}>All Reservations ({reservations.length})</h3>
         <div style={styles.reservationsList}>
-          {reservations && reservations.filter(r => r.active).length > 0 ? (
-            reservations.filter(r => r.active).map((res, index) => (
+          {reservations && reservations.length > 0 ? (
+            reservations.map((res, index) => (
               <div key={index} style={styles.reservationItem}>
                 <div style={styles.resHeader}>
                   <span style={styles.resId}>{res.reservationId}</span>
                   <span
                     style={{
                       ...styles.resStatus,
-                      backgroundColor: res.active ? '#4caf50' : '#f44336',
+                      backgroundColor: res.active ? '#4caf50' : res.paid ? '#ff9800' : '#9e9e9e',
                     }}
                   >
-                    {res.active ? 'ACTIVE' : 'ENDED'}
+                    {res.active ? 'ACTIVE' : res.paid ? 'PAID' : 'RESERVED'}
                   </span>
                 </div>
                 <div style={styles.resDetails}>
@@ -141,19 +141,19 @@ const Dashboard: React.FC<DashboardProps> = ({ transactions, reservations, parki
                   <span>Start: {new Date(res.startTime).toLocaleTimeString()}</span>
                   {res.endTime && <span>End: {new Date(res.endTime).toLocaleTimeString()}</span>}
                 </div>
-                {res.active && onRemoveCar && (
+                {res.active && onDeleteCar && (
                   <button 
-                    onClick={() => onRemoveCar(res.reservationId)} 
-                    style={styles.removeButton}
+                    onClick={() => onDeleteCar(res.carId)} 
+                    style={{...styles.removeButton, backgroundColor: '#f44336'}}
                     disabled={loading}
                   >
-                    End Session
+                    Remove Car
                   </button>
                 )}
               </div>
             ))
           ) : (
-            <div style={styles.emptyMessage}>No active reservations</div>
+            <div style={styles.emptyMessage}>No reservations</div>
           )}
         </div>
       </div>

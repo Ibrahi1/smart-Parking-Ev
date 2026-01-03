@@ -171,6 +171,17 @@ export class BlockchainService {
     return { car: result, metrics };
   }
 
+  async removeCar(
+    carId: string
+  ): Promise<{ success: boolean; message: string; metrics: PerformanceMetrics }> {
+    const { result, metrics } = await this.submitWithMetrics(
+      'RemoveCar',
+      carId
+    );
+
+    return { success: result.success, message: result.message, metrics };
+  }
+
   // ==================== RESERVATION OPERATIONS ====================
 
   async requestReservation(

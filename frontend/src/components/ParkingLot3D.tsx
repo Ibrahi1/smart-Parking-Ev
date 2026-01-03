@@ -149,14 +149,14 @@ const CarModel: React.FC<CarModelProps> = ({ car, position, targetPosition, onCl
       >
         <boxGeometry args={[0.8, 0.4, 1.4]} />
         <meshStandardMaterial 
-          color={hovered ? '#ffeb3b' : (car.evCompatible ? '#2196f3' : '#607d8b')} 
+          color={hovered ? '#ffeb3b' : (car?.evCompatible ? '#2196f3' : '#607d8b')} 
         />
       </mesh>
       
       {/* Car top */}
       <mesh position={[0, 0.6, -0.2]}>
         <boxGeometry args={[0.7, 0.3, 0.8]} />
-        <meshStandardMaterial color={car.evCompatible ? '#1976d2' : '#455a64'} />
+        <meshStandardMaterial color={car?.evCompatible ? '#1976d2' : '#455a64'} />
       </mesh>
       
       {/* Wheels */}
@@ -170,7 +170,7 @@ const CarModel: React.FC<CarModelProps> = ({ car, position, targetPosition, onCl
       )}
       
       {/* EV indicator */}
-      {car.evCompatible && (
+      {car?.evCompatible && (
         <mesh position={[0, 0.8, 0]}>
           <sphereGeometry args={[0.1]} />
           <meshStandardMaterial color="#00e676" emissive="#00e676" emissiveIntensity={0.5} />
@@ -185,7 +185,7 @@ const CarModel: React.FC<CarModelProps> = ({ car, position, targetPosition, onCl
         anchorX="center"
         anchorY="middle"
       >
-        {car.carId}
+        {car?.carId || 'Unknown'}
       </Text>
     </group>
   );
@@ -207,7 +207,7 @@ const ParkingLot3D: React.FC<ParkingLot3DProps> = ({ places, cars, reservations,
   };
   
   // Get all cars with their positions
-  const carsWithPositions = cars.map(car => {
+  const carsWithPositions = cars.filter(car => car && car.carId).map(car => {
     // Check if car has an active reservation
     const activeReservation = reservations.find(res => res.carId === car.carId && res.active);
     
@@ -284,7 +284,7 @@ const ParkingLot3D: React.FC<ParkingLot3DProps> = ({ places, cars, reservations,
       })}
 
       {/* Cars */}
-      {carsWithPositions.map((car) => {
+      {carsWithPositions.filter(car => car && car.carId).map((car) => {
         const pos: [number, number, number] = car.currentPosition;
         const targetPos = car.targetPlace ? 
           places.findIndex(p => p.placeId === car.targetPlace) >= 0 ? 

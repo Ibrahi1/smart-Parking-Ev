@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import ParkingLot3D from './components/ParkingLot3D';
 import Dashboard from './components/Dashboard';
 import ControlPanel from './components/ControlPanel';
+import PaymentHistory from './components/PaymentHistory';
 import { parkingAPI, carAPI, reservationAPI, metricsAPI } from './services/api';
 import wsService from './services/websocket';
 import { Place, Car, Transaction, Reservation, Parking } from './types';
@@ -306,19 +307,33 @@ function App() {
         totalTransactions: prev.totalTransactions + 1,
       }));
 
-      // Auto-pay and start after 2 seconds
+      // Auto-confirm payment immediately
+      try {
+        console.log('Auto-confirming payment for reservation:', result.reservation.reservationId);
+        const paymentResult = await reservationAPI.confirmPayment(result.reservation.reservationId, 10.0);
+        console.log('Payment confirmed:', paymentResult);
+      } catch (error) {
+        console.error('Payment confirmation failed:', error);
+        alert(`❌ Payment confirmation failed: ${error instanceof Error ? error.message : String(error)}`);
+      }
+
+      // Auto-start after delay
       setTimeout(async () => {
         try {
-          await reservationAPI.confirmPayment(result.reservation.reservationId, 10.0);
-          setTimeout(async () => {
-            await reservationAPI.startParking(result.reservation.reservationId);
-          }, 2000);
+          console.log('Auto-starting parking for reservation:', result.reservation.reservationId);
+          const startResult = await reservationAPI.startParking(result.reservation.reservationId);
+          console.log('Parking started:', startResult);
+          alert(`✅ Parking started for reservation ${result.reservation.reservationId}`);
+          
+          // Refresh data after parking starts
+          await refreshReservations();
         } catch (error) {
-          console.error('Error in auto-pay/start:', error);
+          console.error('Error in auto-start:', error);
+          alert(`❌ Error in auto-start: ${error instanceof Error ? error.message : String(error)}`);
         }
-      }, 2000);
+      }, 1500);
 
-      alert(`Reservation ${result.reservation.reservationId} created successfully!`);
+      alert(`Reservation ${result.reservation.reservationId} created and payment confirmed successfully!`);
     } catch (error: any) {
       console.error('Error reserving place:', error);
       alert(`Failed to reserve: ${error.message}`);
@@ -341,14 +356,82 @@ function App() {
 
     setLoading(true);
     try {
+      // First check the reservation status
+      const allReservations = await reservationAPI.getReservations();
+      const reservation = allReservations.reservations.find((r: Reservation) => r.reservationId === reservationId);
+      
+      if (!reservation) {
+        alert('Reservation not found');
+        return;
+      }
+      
+      if (!reservation.parkingStarted) {
+        // If parking hasn't started, remove the car instead
+        console.log('Parking not started, removing car instead');
+        await handleDeleteCar(reservation.carId);
+        return;
+      }
+      
+      if (!reservation.active) {
+        alert('⚠️ This parking session has already ended');
+        setLoading(false);
+        return;
+      }
+      
       console.log('Calling endParking API with reservationId:', reservationId);
       await reservationAPI.endParking(reservationId);
       await refreshPlaces();
       await refreshReservations();
-      alert('Parking session ended successfully!');
+      alert('✅ Parking session ended successfully!');
     } catch (error: any) {
       console.error('Error ending parking:', error);
       alert(`Failed to end parking: ${error.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteCar = async (carId: string) => {
+    if (!confirm('Are you sure you want to remove this car and free the parking place?')) {
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const response = await fetch(`/api/car/${carId}`, { method: 'DELETE' });
+      if (!response.ok) {
+        let errorMessage = 'Failed to remove car';
+        try {
+          const responseText = await response.text();
+          // Try to parse as JSON if it looks like JSON
+          if (responseText.trim().startsWith('{') || responseText.trim().startsWith('[')) {
+            const errorData = JSON.parse(responseText);
+            errorMessage = errorData.message || errorMessage;
+          } else {
+            errorMessage = responseText || errorMessage;
+          }
+        } catch (parseError) {
+          // If parsing fails, use the status text
+          errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+        }
+        throw new Error(errorMessage);
+      }
+      // Refresh data asynchronously
+      setTimeout(async () => {
+        try {
+          await refreshPlaces();
+          await refreshReservations();
+          await refreshCars();
+          alert('✅ Car removed successfully and parking place is now available!');
+        } catch (refreshError) {
+          console.error('Error refreshing data after car removal:', refreshError);
+          // Still show success message even if refresh fails
+          alert('✅ Car removed successfully and parking place is now available!');
+        }
+      }, 100);
+    } catch (error: any) {
+      console.error('Error removing car:', error);
+      alert(`Failed to remove car: ${error.message}`);
     } finally {
       setLoading(false);
     }
@@ -389,6 +472,7 @@ function App() {
 
   const handlePaymentConfirmed = (data: any) => {
     console.log('Payment confirmed event:', data);
+    refreshReservations();
   };
 
   const handleParkingStarted = (data: any) => {
@@ -454,18 +538,24 @@ function App() {
         </div>
 
         <div style={styles.rightPanel}>
-          <Dashboard 
-            transactions={transactions} 
-            reservations={reservations} 
-            parkings={parkings} 
-            places={filteredPlaces}
-            selectedParkingId={selectedParkingId}
-            onSelectParking={handleSelectParking}
-            metrics={metrics} 
-            onUpdate={refreshData} 
-            onRemoveCar={handleRemoveCar} 
-            loading={loading} 
-          />
+          <div style={styles.rightPanelScroll}>
+            <Dashboard 
+              transactions={transactions} 
+              reservations={reservations} 
+              parkings={parkings} 
+              places={filteredPlaces}
+              selectedParkingId={selectedParkingId}
+              onSelectParking={handleSelectParking}
+              metrics={metrics} 
+              onUpdate={refreshData} 
+              onDeleteCar={handleDeleteCar}
+              loading={loading} 
+            />
+            <PaymentHistory 
+              reservations={reservations}
+              cars={cars}
+            />
+          </div>
         </div>
       </div>
 
@@ -524,6 +614,12 @@ const styles: Record<string, React.CSSProperties> = {
     backgroundColor: '#1e1e1e',
     borderLeft: '1px solid #3d3d3d',
     overflowY: 'auto',
+  },
+  rightPanelScroll: {
+    padding: '15px',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '15px',
   },
   loadingOverlay: {
     position: 'fixed',

@@ -153,6 +153,81 @@ class ParkingContract extends Contract {
         return JSON.stringify(car);
     }
 
+    async RemoveCar(ctx, carId) {
+        console.info('============= START : Remove Car ===========');
+        
+        const carAsBytes = await ctx.stub.getState(carId);
+        if (!carAsBytes || carAsBytes.length === 0) {
+            throw new Error(`Car ${carId} does not exist`);
+        }
+        
+        const car = JSON.parse(carAsBytes.toString());
+        
+        // Check if car has active reservations and clean them up
+        const queryString = {
+            selector: {
+                docType: 'reservation',
+                carId: carId,
+                active: true
+            }
+        };
+        
+        const iterator = await ctx.stub.getQueryResult(JSON.stringify(queryString));
+        let result = await iterator.next();
+        
+        // Cancel all active reservations for this car
+        while (!result.done) {
+            const reservation = JSON.parse(result.value.value.toString());
+            
+            // If parking has been started, we cannot remove the car
+            if (reservation.parkingStarted && !reservation.endTime) {
+                await iterator.close();
+                throw new Error(`Cannot remove car ${carId}: parking session is active (started but not ended)`);
+            }
+            
+            // Free up the place if it's reserved or occupied
+            if (reservation.placeId) {
+                try {
+                    const placeAsBytes = await ctx.stub.getState(reservation.placeId);
+                    if (placeAsBytes && placeAsBytes.length > 0) {
+                        const place = JSON.parse(placeAsBytes.toString());
+                        place.status = 'free';
+                        place.currentCarId = null;
+                        place.lastUpdated = this._getTxTimestampString(ctx);
+                        await ctx.stub.putState(reservation.placeId, Buffer.from(JSON.stringify(place)));
+                    }
+                } catch (error) {
+                    console.warn(`Could not free place ${reservation.placeId}:`, error);
+                }
+            }
+            
+            // Mark reservation as cancelled
+            reservation.active = false;
+            reservation.endTime = this._getTxTimestampString(ctx);
+            reservation.cancelledDueToCarRemoval = true;
+            await ctx.stub.putState(reservation.reservationId, Buffer.from(JSON.stringify(reservation)));
+            
+            result = await iterator.next();
+        }
+        
+        await iterator.close();
+        
+        // Delete the car from ledger
+        await ctx.stub.deleteState(carId);
+        
+        // Emit event
+        const event = {
+            type: 'CarRemoved',
+            carId: carId,
+            owner: car.owner,
+            txId: ctx.stub.getTxID()
+        };
+        await ctx.stub.setEvent('CarRemoved', Buffer.from(JSON.stringify(event)));
+        
+        console.info('============= END : Remove Car ===========');
+        return JSON.stringify({ success: true, message: `Car ${carId} removed successfully`, carId });
+    }
+
     // ==================== RESERVATION LOGIC (CRITICAL) ====================
     
     async RequestReservation(ctx, carId, parkingId, desiredType) {

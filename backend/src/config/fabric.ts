@@ -115,14 +115,51 @@ export class FabricConnection {
       const provider = wallet.getProviderRegistry().getProvider(adminUser.type);
       const adminUserContext = await provider.getUserContext(adminUser, 'admin');
 
-      const secret = await ca.register(
-        {
-          affiliation: 'org1.department1',
-          enrollmentID: 'appUser',
-          role: 'client',
-        },
-        adminUserContext
-      );
+      let secret: string;
+      let isNewRegistration = true;
+
+      try {
+        // Try to register the user
+        secret = await ca.register(
+          {
+            affiliation: 'org1.department1',
+            enrollmentID: 'appUser',
+            role: 'client',
+          },
+          adminUserContext
+        );
+        logger.info('appUser registered successfully');
+      } catch (error: any) {
+        // If user is already registered, try to revoke and re-register
+        if (error.message && error.message.includes('already registered')) {
+          logger.info('appUser already registered, attempting to revoke and re-register');
+          isNewRegistration = false;
+          
+          try {
+            // Try to revoke existing registration
+            await ca.revoke({ enrollmentID: 'appUser' }, adminUserContext);
+            logger.info('appUser revoked successfully');
+            
+            // Now register with a new secret
+            secret = await ca.register(
+              {
+                affiliation: 'org1.department1',
+                enrollmentID: 'appUser',
+                role: 'client',
+              },
+              adminUserContext
+            );
+            logger.info('appUser re-registered successfully');
+            isNewRegistration = true;
+          } catch (revokeError: any) {
+            logger.warn('Could not revoke appUser', revokeError);
+            // If revoke fails, we cannot proceed - the user is locked in CA
+            throw new Error('appUser is already registered in Fabric CA and cannot be modified. Please restart the Fabric network or manually remove the user from Fabric CA.');
+          }
+        } else {
+          throw error;
+        }
+      }
 
       const enrollment = await ca.enroll({
         enrollmentID: 'appUser',

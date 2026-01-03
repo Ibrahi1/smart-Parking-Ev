@@ -222,6 +222,23 @@ export class CarController {
       res.status(500).json({ error: error.message });
     }
   }
+
+  async removeCar(req: Request, res: Response): Promise<void> {
+    try {
+      const { id } = req.params;
+
+      const result = await blockchainService.removeCar(id);
+
+      res.json({
+        success: true,
+        message: result.message,
+        metrics: result.metrics,
+      });
+    } catch (error: any) {
+      logger.error('Error removing car:', error);
+      res.status(500).json({ error: error.message });
+    }
+  }
 }
 
 export class ReservationController {

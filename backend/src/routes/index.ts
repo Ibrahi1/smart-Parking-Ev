@@ -20,6 +20,7 @@ router.post('/car', (req, res) => carController.registerCar(req, res));
 router.get('/car', (req, res) => carController.getAllCars(req, res));
 router.get('/car/:id', (req, res) => carController.getCar(req, res));
 router.put('/car/:id/battery', (req, res) => carController.updateBattery(req, res));
+router.delete('/car/:id', (req, res) => carController.removeCar(req, res));
 
 // ==================== RESERVATION ROUTES ====================
 router.post('/reservation', (req, res) => reservationController.requestReservation(req, res));

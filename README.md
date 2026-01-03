@@ -113,8 +113,8 @@ This project demonstrates a complete smart parking solution secured by blockchai
 ### 1. Clone the Repository
 
 ```bash
-git clone <repository-url>
-cd smart-parking-ev
+git clone git@github.com:Ibrahi1/smart-Parking-Ev.git
+cd smart-Parking-Ev
 ```
 
 ### 2. Start Hyperledger Fabric Network
@@ -150,6 +150,7 @@ cp .env.example .env
 ### 5. Start Backend Server
 
 ```bash
+rm -rf wallet
 npm run dev
 ```
 
