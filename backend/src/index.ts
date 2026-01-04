@@ -9,6 +9,11 @@ import { eventListenerService } from './services/event.service';
 import { logger } from './config/logger';
 import * as fs from 'fs';
 import * as path from 'path';
+import { securityService } from './services/security.service';
+import { siemService } from './services/siem.service';
+import { alertService } from './services/alert.service';
+import { incidentService } from './services/incident.service';
+import { socLogger } from './middleware/soc-logger';
 
 // Load environment variables
 dotenv.config();
@@ -35,6 +40,7 @@ app.use((req, res, next) => {
   next();
 });
 
+app.use('/api', socLogger);
 // API Routes
 app.use('/api', routes);
 
@@ -72,6 +78,25 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
 // Initialize application
 async function initialize() {
   try {
+    // Initialize SOC services
+    logger.info('Initializing SOC services...');
+    await securityService.initialize();
+    await siemService.start();
+    logger.info('SOC services started');
+
+    // Connect SOC to WebSocket
+    alertService.on('alert', (alert) => {
+      io.emit('securityAlert', alert);
+    });
+
+    siemService.on('threatDetected', (data) => {
+      io.emit('threatDetected', data);
+    });
+
+    incidentService.on('incidentCreated', (incident) => {
+      io.emit('incidentCreated', incident);
+    });
+    
     // Create logs directory
     const logsDir = path.join(__dirname, '..', 'logs');
     if (!fs.existsSync(logsDir)) {

@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import socRoutes from './soc.routes';
 import {
   parkingController,
   carController,
@@ -8,7 +9,7 @@ import {
 } from '../controllers';
 
 const router = Router();
-
+router.use('/soc', socRoutes);
 // ==================== PARKING ROUTES ====================
 router.post('/parking', (req, res) => parkingController.createParking(req, res));
 router.get('/parking', (req, res) => parkingController.getAllParkings(req, res));

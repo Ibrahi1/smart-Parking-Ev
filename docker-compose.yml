@@ -9,17 +9,17 @@ services:
     container_name: smart-parking-backend
     ports:
       - "3001:3001"
-    environment:
-      - NODE_ENV=development
-      - PORT=3001
-      - CHANNEL_NAME=mychannel
-      - CHAINCODE_NAME=parking
-      - FABRIC_CFG_PATH=../fabric-samples/config
-      - CORE_PEER_ADDRESS=localhost:7051
-      - CORE_PEER_LOCALMSPID=Org1MSP
-      - CORE_PEER_MSPCONFIGPATH=../fabric-samples/test-network/organizations/peerOrganizations/org1.example.com/users/Admin@org1.example.com/msp
-      - CORE_PEER_TLS_ENABLED=true
-      - CORE_PEER_TLS_ROOTCERT_FILE=../fabric-samples/test-network/organizations/peerOrganizations/org1.example.com/peers/peer0.org1.example.com/tls/ca.crt
+    # environment:
+    #   - NODE_ENV=development
+    #   - PORT=3001
+    #   - CHANNEL_NAME=mychannel
+    #   - CHAINCODE_NAME=parking
+    #   - FABRIC_CFG_PATH=../fabric-samples/config
+    #   - CORE_PEER_ADDRESS=localhost:7051
+    #   - CORE_PEER_LOCALMSPID=Org1MSP
+    #   - CORE_PEER_MSPCONFIGPATH=../fabric-samples/test-network/organizations/peerOrganizations/org1.example.com/users/Admin@org1.example.com/msp
+    #   - CORE_PEER_TLS_ENABLED=true
+    #   - CORE_PEER_TLS_ROOTCERT_FILE=../fabric-samples/test-network/organizations/peerOrganizations/org1.example.com/peers/peer0.org1.example.com/tls/ca.crt
     volumes:
       - ./backend:/app
       - /app/node_modules

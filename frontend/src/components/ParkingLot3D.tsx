@@ -269,9 +269,7 @@ const ParkingLot3D: React.FC<ParkingLot3DProps> = ({ places, cars, reservations,
       </group>
 
       {/* Parking spots */}
-      {places.map((place, index) => {
-        console.log("places",place);
-        
+      {places.map((place, index) => {        
         const position = calculatePosition(index);
         return (
           <ParkingSpot

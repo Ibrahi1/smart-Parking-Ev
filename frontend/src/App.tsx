@@ -6,12 +6,14 @@ import PaymentHistory from './components/PaymentHistory';
 import { parkingAPI, carAPI, reservationAPI, metricsAPI } from './services/api';
 import wsService from './services/websocket';
 import { Place, Car, Transaction, Reservation, Parking } from './types';
+import SOCDashboard from './components/SOCDashboard';
 
 function App() {
   const [places, setPlaces] = useState<Place[]>([]);
   const [cars, setCars] = useState<Car[]>([]);
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [parkings, setParkings] = useState<Parking[]>([]);
+  const [activeTab, setActiveTab] = useState<'parking' | 'soc'>('parking');
   const [transactions, setTransactions] = useState<Transaction[]>(() => {
     // Load transactions from localStorage on initialization
     try {
@@ -223,8 +225,6 @@ function App() {
         evCompatible: carData.evCompatible,
         parkingId: carData.parkingId,
       });
-
-      console.log("car", result);
 
       const newCar: Car = {
         ...result.car,
@@ -503,8 +503,6 @@ function App() {
   };
 
   const handleSelectParking = (parking: Parking) => {
-    // console.log("parking",parking);
-    
     setSelectedParkingId(parking.parkingId);
   };
 
@@ -515,56 +513,89 @@ function App() {
   const filterCars = cars.filter(f => f.parkingId === selectedParkingId);  
   
   return (
-    <div style={styles.app}>
-      <header style={styles.header}>
-        <h1 style={styles.headerTitle}>Smart Parking & EV Charging</h1>
-        <p style={styles.headerSubtitle}>Powered by Hyperledger Fabric</p>
-      </header>
+  <div style={styles.app}>
+    {/* Tab Navigation */}
+    <div style={styles.tabNav}>
+      <button
+        style={{
+          ...styles.tab,
+          ...(activeTab === 'parking' ? styles.tabActive : {})
+        }}
+        onClick={() => setActiveTab('parking')}
+      >
+        🚗 Smart Parking
+      </button>
+      <button
+        style={{
+          ...styles.tab,
+          ...(activeTab === 'soc' ? styles.tabActive : {})
+        }}
+        onClick={() => setActiveTab('soc')}
+      >
+        🛡️ SOC Dashboard
+      </button>
+    </div>
 
-      <div style={styles.mainContainer}>
-        <div style={styles.leftPanel}>
-          <ControlPanel
-            onCreateCar={handleCreateCar}
-            onReservePlace={handleReservePlace}
-            onCreateParking={handleCreateParking}
-            parkings={parkings}
-            availableCars={availableCars}
-            loading={loading}
-          />
-        </div>
-
-        <div style={styles.centerPanel}>
-          <ParkingLot3D places={filteredPlaces} cars={filterCars} reservations={reservations} onCarClick={handleCarClick} />
-        </div>
-
-        <div style={styles.rightPanel}>
-          <div style={styles.rightPanelScroll}>
-            <Dashboard 
-              transactions={transactions} 
-              reservations={reservations} 
-              parkings={parkings} 
-              places={filteredPlaces}
-              selectedParkingId={selectedParkingId}
-              onSelectParking={handleSelectParking}
-              metrics={metrics} 
-              onUpdate={refreshData} 
-              onDeleteCar={handleDeleteCar}
-              loading={loading} 
-            />
-            <PaymentHistory 
-              reservations={reservations}
-              cars={cars}
+    {/* Parking Tab Content */}
+    {activeTab === 'parking' && (
+      <>
+        <header style={styles.header}>
+          <h1 style={styles.headerTitle}>Smart Parking & EV Charging</h1>
+          <p style={styles.headerSubtitle}>Powered by Hyperledger Fabric</p>
+        </header>
+        <div style={styles.mainContainer}>
+          <div style={styles.leftPanel}>
+            <ControlPanel
+              onCreateCar={handleCreateCar}
+              onReservePlace={handleReservePlace}
+              onCreateParking={handleCreateParking}
+              parkings={parkings}
+              availableCars={availableCars}
+              loading={loading}
             />
           </div>
+          <div style={styles.centerPanel}>
+            <ParkingLot3D 
+              places={filteredPlaces} 
+              cars={filterCars} 
+              reservations={reservations} 
+              onCarClick={handleCarClick} 
+            />
+          </div>
+          <div style={styles.rightPanel}>
+            <div style={styles.rightPanelScroll}>
+              <Dashboard 
+                transactions={transactions} 
+                reservations={reservations} 
+                parkings={parkings} 
+                places={filteredPlaces}
+                selectedParkingId={selectedParkingId}
+                onSelectParking={handleSelectParking}
+                metrics={metrics} 
+                onUpdate={refreshData} 
+                onDeleteCar={handleDeleteCar}
+                loading={loading} 
+              />
+              <PaymentHistory 
+                reservations={reservations}
+                cars={cars}
+              />
+            </div>
+          </div>
         </div>
-      </div>
+        {!initialized && (
+          <div style={styles.loadingOverlay}>
+            <div style={styles.loadingSpinner}>Loading...</div>
+          </div>
+        )}
+      </>
+    )}
 
-      {!initialized && (
-        <div style={styles.loadingOverlay}>
-          <div style={styles.loadingSpinner}>Loading...</div>
-        </div>
-      )}
-    </div>
+    {/* SOC Tab Content */}
+    {activeTab === 'soc' && (
+      <SOCDashboard />
+    )}
+  </div>
   );
 }
 
@@ -578,6 +609,33 @@ const styles: Record<string, React.CSSProperties> = {
     color: '#ffffff',
     fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
   },
+  // Add these new tab styles:
+  tabNav: {
+    display: 'flex',
+    gap: '0',
+    backgroundColor: '#1e1e1e',
+    borderBottom: '2px solid #00bcd4',
+    padding: '0',
+  },
+  tab: {
+    padding: '15px 30px',
+    backgroundColor: 'transparent',
+    color: '#aaa',
+    border: 'none',
+    borderBottom: '3px solid transparent',
+    cursor: 'pointer',
+    fontSize: '16px',
+    fontWeight: '500',
+    transition: 'all 0.3s',
+    outline: 'none',
+  },
+  tabActive: {
+    color: '#00bcd4',
+    backgroundColor: '#263238',
+    borderBottomColor: '#00bcd4',
+    fontWeight: 'bold',
+  },
+  // Keep all your existing styles:
   header: {
     backgroundColor: '#1e1e1e',
     padding: '20px',

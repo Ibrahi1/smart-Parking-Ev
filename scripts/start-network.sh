@@ -38,7 +38,7 @@ fi
 # Check if fabric-samples exists
 if [ ! -d "$SCRIPT_DIR/fabric-samples" ]; then
     echo -e "${YELLOW}Fabric samples not found. Downloading...${NC}"
-    cd "$SCRIPT_DIR/fabric-samples"
+    cd "$SCRIPT_DIR"
     curl -sSL https://bit.ly/2ysbOFE | bash -s -- 2.5.0 1.5.5
 fi
 
