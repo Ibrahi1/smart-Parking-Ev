@@ -31,4 +31,7 @@ router.get('/alerts', (req, res) => socController.getAlerts(req, res));
 router.get('/alerts/counts', (req, res) => socController.getAlertCounts(req, res));
 router.post('/alerts/:id/acknowledge', (req, res) => socController.acknowledgeAlert(req, res));
 
+// Debug
+router.get('/debug', (req, res) => socController.getDebugInfo(req, res));
+
 export default router;

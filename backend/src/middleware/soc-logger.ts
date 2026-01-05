@@ -55,6 +55,25 @@ function recordSecurityEvent(req: Request, res: Response, body: any) {
     }
   }
 
+  // Log ALL API access for rate limiting and DDoS detection
+  securityService.recordEvent({
+    type: 'info',
+    severity: 'low',
+    category: 'api_access',
+    title: 'API Request',
+    description: `${method} ${path}`,
+    source: {
+      ip,
+      component: 'api',
+    },
+    details: {
+      method,
+      path,
+      statusCode,
+      success,
+    },
+  });
+
   // Log reservation attempts
   if (path.includes('/reservation') && method === 'POST' && !path.includes('/pay') && !path.includes('/start') && !path.includes('/end')) {
     securityService.recordEvent({

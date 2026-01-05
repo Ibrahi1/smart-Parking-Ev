@@ -13,7 +13,8 @@ async function simulatePaymentFraud() {
     // Step 1: Get available parkings
     console.log('Step 1: Getting available parkings...');
     const parkingsRes = await axios.get(`${API_URL}/parking`);
-    const parkings = parkingsRes.data;
+    const parkingsData = parkingsRes.data;
+    const parkings = parkingsData.parkings || parkingsData;
     
     if (!parkings || parkings.length === 0) {
       console.log('  ⚠️ No parkings available. Please create one first.');
@@ -23,43 +24,58 @@ async function simulatePaymentFraud() {
     const parkingId = parkings[0].parkingId;
     console.log(`  ✓ Using parking: ${parkingId}\n`);
 
-    // Step 2: Create a test car
-    console.log('Step 2: Creating test car...');
-    const carId = `FRAUD-${Date.now()}`;
-    const carRes = await axios.post(`${API_URL}/car`, {
-      carId,
-      owner: 'Fraudster',
-      batteryLevel: 50,
-      evCompatible: false,
-      parkingId,
-    });
-    console.log(`  ✓ Car created: ${carId}\n`);
-
-    // Step 3: Get available places
-    console.log('Step 3: Getting available places...');
-    const placesRes = await axios.get(`${API_URL}/parking/${parkingId}/places`);
-    const places = placesRes.data;
-    const availablePlace = places.find(p => p.status === 'available' && p.placeType === 'regular');
+    // Step 2: Get existing reservations to find one without payment
+    console.log('Step 2: Getting existing reservations...');
+    const reservationsRes = await axios.get(`${API_URL}/reservation`);
+    const reservationsData = reservationsRes.data;
+    const reservations = reservationsData.reservations || reservationsData;
     
-    if (!availablePlace) {
-      console.log('  ⚠️ No available places found.');
-      return;
+    // Find an unpaid reservation
+    const unpaidReservation = reservations.find(r => r.active && !r.paid);
+    
+    let reservationId;
+    
+    if (unpaidReservation) {
+      reservationId = unpaidReservation.reservationId;
+      console.log(`  ✓ Found unpaid reservation: ${reservationId}\n`);
+    } else {
+      // Create a new reservation for testing
+      console.log('  No unpaid reservations. Creating a new car and reservation...\n');
+      
+      console.log('Step 3: Creating test car...');
+      const carId = `FRAUD-${Date.now()}`;
+      try {
+        await axios.post(`${API_URL}/car`, {
+          carId,
+          owner: 'Fraudster',
+          batteryLevel: 50,
+          evCompatible: false,
+          parkingId,
+        });
+        console.log(`  ✓ Car created: ${carId}`);
+        
+        // The car creation also creates a reservation automatically
+        // Get the new reservation
+        const newReservationsRes = await axios.get(`${API_URL}/reservation`);
+        const newReservations = newReservationsRes.data.reservations || newReservationsRes.data;
+        const newReservation = newReservations.find(r => r.carId === carId && r.active);
+        
+        if (newReservation) {
+          reservationId = newReservation.reservationId;
+          console.log(`  ✓ Reservation created: ${reservationId}\n`);
+        } else {
+          console.log('  ⚠️ Could not find reservation for the new car.\n');
+          return;
+        }
+      } catch (carError) {
+        console.log(`  ⚠️ Car creation failed: ${carError.response?.data?.error || carError.message}`);
+        console.log('  Continuing with fraud attempts using fake reservation ID...\n');
+        reservationId = 'FAKE-RESERVATION-ID';
+      }
     }
-    
-    console.log(`  ✓ Found available place: ${availablePlace.placeId}\n`);
 
-    // Step 4: Make a reservation
-    console.log('Step 4: Making reservation...');
-    const reservationRes = await axios.post(`${API_URL}/reservation`, {
-      carId,
-      placeId: availablePlace.placeId,
-      placeType: 'regular',
-    });
-    const reservationId = reservationRes.data.reservationId;
-    console.log(`  ✓ Reservation created: ${reservationId}\n`);
-
-    // Step 5: Try to start parking WITHOUT payment
-    console.log('Step 5: Attempting to start parking WITHOUT payment...');
+    // Step 4: Try to start parking WITHOUT payment (FRAUD ATTEMPT)
+    console.log('Step 4: Attempting to start parking WITHOUT payment...');
     console.log('  ⚠️ This should be BLOCKED by smart contract!\n');
 
     try {
@@ -72,15 +88,15 @@ async function simulatePaymentFraud() {
       console.log(`  • Reason: ${errorMsg}\n`);
     }
 
-    // Try 5 more times to trigger brute force detection
-    console.log('Step 6: Attempting multiple fraud attempts (trigger detection)...');
-    for (let i = 1; i <= 5; i++) {
+    // Step 5: Multiple fraud attempts to trigger detection rules
+    console.log('Step 5: Attempting multiple fraud attempts (trigger detection)...');
+    for (let i = 1; i <= 10; i++) {
       try {
         await axios.post(`${API_URL}/reservation/${reservationId}/start`);
       } catch (error) {
-        console.log(`  [${i}/5] Fraud attempt blocked ✓`);
+        console.log(`  [${i}/10] Fraud attempt blocked ✓`);
       }
-      await new Promise(resolve => setTimeout(resolve, 500));
+      await new Promise(resolve => setTimeout(resolve, 300));
     }
 
   } catch (error) {

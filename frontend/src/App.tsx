@@ -41,6 +41,7 @@ function App() {
   });
   const [loading, setLoading] = useState(false);
   const [initialized, setInitialized] = useState(false);
+  const [activeModal, setActiveModal] = useState<'dashboard' | 'payment' | null>(null);
 
   // Initialize parking and connect to WebSocket
   useEffect(() => {
@@ -217,6 +218,23 @@ function App() {
   }) => {
     setLoading(true);
     try {
+      // First, check if there are available places for this car type
+      const parkingPlaces = places.filter(p => p.parkingId === carData.parkingId);
+      const desiredType = carData.evCompatible ? 'ev' : 'regular';
+      const availablePlaces = parkingPlaces.filter(p => p.status === 'free' && p.type === desiredType);
+      
+      if (availablePlaces.length === 0) {
+        // Check if there are any places of the desired type at all
+        const totalPlacesOfType = parkingPlaces.filter(p => p.type === desiredType);
+        if (totalPlacesOfType.length === 0) {
+          alert(`❌ No ${desiredType.toUpperCase()} parking places exist in this parking lot. Please choose a different parking or car type.`);
+        } else {
+          alert(`❌ All ${desiredType.toUpperCase()} parking places are currently reserved or occupied. Please try again later.`);
+        }
+        setLoading(false);
+        return;
+      }
+
       const carId = `CAR-${Date.now()}`;
       const result = await carAPI.registerCar({
         carId,
@@ -247,13 +265,45 @@ function App() {
         totalTransactions: prev.totalTransactions + 1,
       }));
 
+      // Auto-confirm payment for the reservation created by the backend
+      if (result.reservation && result.reservation.reservationId) {
+        try {
+          console.log('Auto-confirming payment for reservation:', result.reservation.reservationId);
+          const paymentResult = await reservationAPI.confirmPayment(result.reservation.reservationId, 10.0);
+          console.log('Payment confirmed:', paymentResult);
+          
+          // Auto-start parking after payment
+          setTimeout(async () => {
+            try {
+              console.log('Auto-starting parking for reservation:', result.reservation.reservationId);
+              await reservationAPI.startParking(result.reservation.reservationId);
+              console.log('Parking started successfully');
+              await refreshReservations();
+              await refreshPlaces();
+            } catch (startError) {
+              console.error('Error auto-starting parking:', startError);
+            }
+          }, 1000);
+        } catch (paymentError) {
+          console.error('Payment confirmation failed:', paymentError);
+          alert(`⚠️ Car registered but payment confirmation failed: ${paymentError instanceof Error ? paymentError.message : String(paymentError)}`);
+        }
+      }
+
       // Refresh data to show the new reservation
       await refreshData();
 
-      alert(`Car ${carId} registered and reserved successfully!`);
+      alert(`✅ Car ${carId} registered, reserved, and payment confirmed successfully!`);
     } catch (error: any) {
       console.error('Error creating car:', error);
-      alert(`Failed to create car: ${error.message}`);
+      
+      // Check if error is about no available places
+      if (error.message && (error.message.includes('No available') || error.message.includes('no available'))) {
+        alert(`❌ No available parking places. All spots are currently reserved or occupied.`);
+      } else {
+        alert(`❌ Failed to create car: ${error.message}`);
+      }
+      
       addTransaction({
         txId: 'N/A',
         operation: 'RegisterCar',
@@ -272,6 +322,21 @@ function App() {
       // Find the car's parking
       const car = cars.find(c => c.carId === carId);
       const parkingId = car?.parkingId || 'P1';
+
+      // Check if there are available places for this type
+      const parkingPlaces = places.filter(p => p.parkingId === parkingId);
+      const availablePlaces = parkingPlaces.filter(p => p.status === 'free' && p.type === desiredType);
+      
+      if (availablePlaces.length === 0) {
+        const totalPlacesOfType = parkingPlaces.filter(p => p.type === desiredType);
+        if (totalPlacesOfType.length === 0) {
+          alert(`❌ No ${desiredType.toUpperCase()} parking places exist in this parking lot.`);
+        } else {
+          alert(`❌ All ${desiredType.toUpperCase()} parking places are currently reserved or occupied. Please try again later.`);
+        }
+        setLoading(false);
+        return;
+      }
 
       const result = await reservationAPI.requestReservation({
         carId,
@@ -310,11 +375,22 @@ function App() {
       // Auto-confirm payment immediately
       try {
         console.log('Auto-confirming payment for reservation:', result.reservation.reservationId);
+        console.log('Reservation before payment:', result.reservation);
         const paymentResult = await reservationAPI.confirmPayment(result.reservation.reservationId, 10.0);
-        console.log('Payment confirmed:', paymentResult);
+        console.log('Payment confirmed result:', paymentResult);
+        
+        // The paymentResult.reservation should contain the updated reservation with paid=true
+        if (paymentResult && paymentResult.reservation) {
+          console.log('Updated reservation after payment confirmation:', paymentResult.reservation);
+        }
+        
+        // Refresh reservations to ensure payment data is updated
+        await refreshReservations();
       } catch (error) {
         console.error('Payment confirmation failed:', error);
         alert(`❌ Payment confirmation failed: ${error instanceof Error ? error.message : String(error)}`);
+        // Even if payment fails, we still want to refresh to show the current state
+        await refreshReservations();
       }
 
       // Auto-start after delay
@@ -472,6 +548,7 @@ function App() {
 
   const handlePaymentConfirmed = (data: any) => {
     console.log('Payment confirmed event:', data);
+    console.log('Refreshing reservations due to payment confirmation...');
     refreshReservations();
   };
 
@@ -564,28 +641,115 @@ function App() {
           </div>
           <div style={styles.rightPanel}>
             <div style={styles.rightPanelScroll}>
-              <Dashboard 
-                transactions={transactions} 
-                reservations={reservations} 
-                parkings={parkings} 
-                places={filteredPlaces}
-                selectedParkingId={selectedParkingId}
-                onSelectParking={handleSelectParking}
-                metrics={metrics} 
-                onUpdate={refreshData} 
-                onDeleteCar={handleDeleteCar}
-                loading={loading} 
-              />
-              <PaymentHistory 
-                reservations={reservations}
-                cars={cars}
-              />
+              {/* Dashboard Summary Card */}
+              <div 
+                style={styles.summaryCard}
+                onClick={() => setActiveModal('dashboard')}
+              >
+                <div style={styles.summaryCardIcon}>📊</div>
+                <div style={styles.summaryCardContent}>
+                  <h3 style={styles.summaryCardTitle}>Dashboard</h3>
+                  <div style={styles.summaryCardStats}>
+                    <span>🚗 {reservations.filter(r => r.active).length} Active</span>
+                    <span>📝 {transactions.length} Transactions</span>
+                  </div>
+                  <p style={styles.summaryCardHint}>Click to view details</p>
+                </div>
+                <div style={styles.summaryCardArrow}>→</div>
+              </div>
+
+              {/* Payment History Summary Card */}
+              <div 
+                style={styles.summaryCard}
+                onClick={() => setActiveModal('payment')}
+              >
+                <div style={styles.summaryCardIcon}>💰</div>
+                <div style={styles.summaryCardContent}>
+                  <h3 style={styles.summaryCardTitle}>Payment History</h3>
+                  <div style={styles.summaryCardStats}>
+                    <span>✅ {reservations.filter(r => r.paid).length} Paid</span>
+                    <span>💵 ${reservations.filter(r => r.paid).reduce((sum, r) => sum + (r.amount || 0), 0).toFixed(2)}</span>
+                  </div>
+                  <p style={styles.summaryCardHint}>Click to view details</p>
+                </div>
+                <div style={styles.summaryCardArrow}>→</div>
+              </div>
+
+              {/* Quick Stats */}
+              <div style={styles.quickStats}>
+                <div style={styles.quickStatItem}>
+                  <span style={styles.quickStatValue}>{filteredPlaces.filter(p => p.status === 'free').length}</span>
+                  <span style={styles.quickStatLabel}>Free Spots</span>
+                </div>
+                <div style={styles.quickStatItem}>
+                  <span style={styles.quickStatValue}>{filteredPlaces.filter(p => p.status === 'occupied').length}</span>
+                  <span style={styles.quickStatLabel}>Occupied</span>
+                </div>
+                <div style={styles.quickStatItem}>
+                  <span style={styles.quickStatValue}>{filteredPlaces.filter(p => p.type === 'ev').length}</span>
+                  <span style={styles.quickStatLabel}>EV Stations</span>
+                </div>
+              </div>
             </div>
           </div>
         </div>
         {!initialized && (
           <div style={styles.loadingOverlay}>
             <div style={styles.loadingSpinner}>Loading...</div>
+          </div>
+        )}
+
+        {/* Modal for Dashboard */}
+        {activeModal === 'dashboard' && (
+          <div style={styles.modalOverlay} onClick={() => setActiveModal(null)}>
+            <div style={styles.modalContent} onClick={(e) => e.stopPropagation()}>
+              <div style={styles.modalHeader}>
+                <h2 style={styles.modalTitle}>📊 Dashboard</h2>
+                <button 
+                  style={styles.modalCloseBtn}
+                  onClick={() => setActiveModal(null)}
+                >
+                  ✕
+                </button>
+              </div>
+              <div style={styles.modalBody}>
+                <Dashboard 
+                  transactions={transactions} 
+                  reservations={reservations} 
+                  parkings={parkings} 
+                  places={filteredPlaces}
+                  selectedParkingId={selectedParkingId}
+                  onSelectParking={handleSelectParking}
+                  metrics={metrics} 
+                  onUpdate={refreshData} 
+                  onDeleteCar={handleDeleteCar}
+                  loading={loading} 
+                />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Modal for Payment History */}
+        {activeModal === 'payment' && (
+          <div style={styles.modalOverlay} onClick={() => setActiveModal(null)}>
+            <div style={styles.modalContent} onClick={(e) => e.stopPropagation()}>
+              <div style={styles.modalHeader}>
+                <h2 style={styles.modalTitle}>💰 Payment History</h2>
+                <button 
+                  style={styles.modalCloseBtn}
+                  onClick={() => setActiveModal(null)}
+                >
+                  ✕
+                </button>
+              </div>
+              <div style={styles.modalBody}>
+                <PaymentHistory 
+                  reservations={reservations}
+                  cars={cars}
+                />
+              </div>
+            </div>
           </div>
         )}
       </>
@@ -694,6 +858,138 @@ const styles: Record<string, React.CSSProperties> = {
   loadingSpinner: {
     fontSize: '24px',
     color: '#00bcd4',
+  },
+  // Summary Card Styles
+  summaryCard: {
+    backgroundColor: '#2a2a2a',
+    borderRadius: '12px',
+    padding: '20px',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '15px',
+    cursor: 'pointer',
+    border: '1px solid #404040',
+    transition: 'all 0.3s ease',
+    boxShadow: '0 2px 8px rgba(0, 0, 0, 0.2)',
+  },
+  summaryCardIcon: {
+    fontSize: '40px',
+    width: '60px',
+    height: '60px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#1a3a3a',
+    borderRadius: '12px',
+  },
+  summaryCardContent: {
+    flex: 1,
+  },
+  summaryCardTitle: {
+    margin: 0,
+    fontSize: '18px',
+    fontWeight: 'bold',
+    color: '#ffffff',
+    marginBottom: '8px',
+  },
+  summaryCardStats: {
+    display: 'flex',
+    gap: '15px',
+    fontSize: '14px',
+    color: '#4dd0e1',
+    marginBottom: '5px',
+  },
+  summaryCardHint: {
+    margin: 0,
+    fontSize: '12px',
+    color: '#888',
+  },
+  summaryCardArrow: {
+    fontSize: '24px',
+    color: '#4dd0e1',
+    fontWeight: 'bold',
+  },
+  // Quick Stats Styles
+  quickStats: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(3, 1fr)',
+    gap: '10px',
+    marginTop: '10px',
+  },
+  quickStatItem: {
+    backgroundColor: '#2a2a2a',
+    borderRadius: '10px',
+    padding: '15px',
+    textAlign: 'center' as const,
+    border: '1px solid #404040',
+  },
+  quickStatValue: {
+    display: 'block',
+    fontSize: '28px',
+    fontWeight: 'bold',
+    color: '#4dd0e1',
+  },
+  quickStatLabel: {
+    display: 'block',
+    fontSize: '11px',
+    color: '#888',
+    marginTop: '5px',
+    textTransform: 'uppercase' as const,
+  },
+  // Modal Styles
+  modalOverlay: {
+    position: 'fixed' as const,
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.85)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 2000,
+    padding: '20px',
+  },
+  modalContent: {
+    backgroundColor: '#1e1e1e',
+    borderRadius: '16px',
+    width: '90%',
+    maxWidth: '900px',
+    maxHeight: '85vh',
+    overflow: 'hidden',
+    boxShadow: '0 10px 40px rgba(0, 0, 0, 0.5)',
+    border: '1px solid #00bcd4',
+    display: 'flex',
+    flexDirection: 'column' as const,
+  },
+  modalHeader: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: '20px 25px',
+    borderBottom: '1px solid #404040',
+    backgroundColor: '#263238',
+  },
+  modalTitle: {
+    margin: 0,
+    fontSize: '22px',
+    fontWeight: 'bold',
+    color: '#ffffff',
+  },
+  modalCloseBtn: {
+    background: 'none',
+    border: 'none',
+    color: '#aaa',
+    fontSize: '28px',
+    cursor: 'pointer',
+    padding: '5px 10px',
+    borderRadius: '8px',
+    transition: 'all 0.2s',
+  },
+  modalBody: {
+    padding: '25px',
+    overflowY: 'auto' as const,
+    flex: 1,
   },
 };
 

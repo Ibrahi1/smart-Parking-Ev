@@ -13,13 +13,14 @@ const PaymentHistory: React.FC<PaymentHistoryProps> = ({ reservations, cars }) =
     console.log('All reservations:', reservations);
     const paid = reservations.filter(res => {
       const isPaid = res.paid === true;
-      console.log(`Reservation ${res.reservationId}: paid=${res.paid}, amount=${res.amount}`);
+      console.log(`Reservation ${res.reservationId}: paid=${res.paid}, amount=${res.amount}, paymentTime=${res.paymentTime}`);
       return isPaid;
     });
     console.log('Paid reservations:', paid);
     return paid.sort((a, b) => {
-      const timeA = new Date(a.paymentTime || '').getTime();
-      const timeB = new Date(b.paymentTime || '').getTime();
+      // Sort by paymentTime if available, otherwise by startTime
+      const timeA = new Date(a.paymentTime || a.startTime || '').getTime();
+      const timeB = new Date(b.paymentTime || b.startTime || '').getTime();
       return timeB - timeA; // Most recent first
     });
   }, [reservations]);
@@ -125,10 +126,9 @@ const PaymentHistory: React.FC<PaymentHistoryProps> = ({ reservations, cars }) =
         ) : (
           <div style={styles.emptyMessage}>
             📭 No payment history yet
-            <div style={{ fontSize: '12px', marginTop: '10px', color: '#666' }}>
-              Debug Info:<br/>
+            <div style={{ fontSize: '12px', marginTop: '10px', color: '#888' }}>
               Total reservations: {reservations.length}<br/>
-              Reservations: {reservations.map(r => `${r.reservationId}(paid:${r.paid})`).join(', ')}
+              Paid: {reservations.filter(r => r.paid).length} | Unpaid: {reservations.filter(r => !r.paid).length}
             </div>
           </div>
         )}

@@ -14,6 +14,7 @@ class SIEMService extends EventEmitter {
   private ruleEngine: RuleEngine;
   private rules: ThreatRule[] = [];
   private eventBuffer: Map<string, SecurityEvent[]> = new Map(); // For aggregation
+  private triggeredRules: Map<string, Date> = new Map(); // Prevent rule spam
 
   constructor() {
     super();
@@ -41,14 +42,28 @@ class SIEMService extends EventEmitter {
   // Process incoming security event
   private async processEvent(event: SecurityEvent): Promise<void> {
     try {
-      // Add to buffer for aggregation rules
-      this.addToBuffer(event);
+      logger.debug(`[SIEM] Processing event: ${event.category} - ${event.title}`);
+      
+      // Add to global buffer for all events
+      this.addToBuffer('all', event);
 
       // Check against all enabled rules
       for (const rule of this.rules.filter(r => r.enabled)) {
-        const match = await this.evaluateRule(rule, event);
-        if (match) {
-          await this.handleRuleMatch(match);
+        // Check if event matches rule conditions
+        const conditionsMatch = this.ruleEngine.evaluate(rule, event);
+        
+        if (conditionsMatch) {
+          logger.debug(`[SIEM] Event matches conditions for rule: ${rule.name}`);
+          
+          // Add to rule-specific buffer
+          const bufferKey = this.getRuleBufferKey(rule, event);
+          this.addToBuffer(bufferKey, event);
+          
+          // Check if aggregation threshold is met (or no aggregation needed)
+          const match = await this.evaluateRuleThreshold(rule, bufferKey);
+          if (match) {
+            await this.handleRuleMatch(match);
+          }
         }
       }
     } catch (error) {
@@ -56,35 +71,36 @@ class SIEMService extends EventEmitter {
     }
   }
 
-  // Evaluate a single rule against an event
-  private async evaluateRule(rule: ThreatRule, event: SecurityEvent): Promise<RuleMatch | null> {
-    // Simple condition evaluation
+  // Get buffer key for a rule based on its aggregation field
+  private getRuleBufferKey(rule: ThreatRule, event: SecurityEvent): string {
     if (rule.aggregation) {
-      return this.evaluateAggregationRule(rule);
-    } else {
-      const matches = this.ruleEngine.evaluate(rule, event);
-      if (matches) {
-        return {
-          rule,
-          matchedData: event,
-          timestamp: new Date(),
-          confidence: rule.confidence || 80,
-        };
-      }
+      const fieldValue = this.extractFieldValue(event, rule.aggregation.field);
+      return `${rule.ruleId}:${fieldValue || 'unknown'}`;
     }
-    return null;
+    return `${rule.ruleId}:single`;
   }
 
-  // Evaluate aggregation-based rules
-  private evaluateAggregationRule(rule: ThreatRule): RuleMatch | null {
-    if (!rule.aggregation) return null;
+  // Evaluate if rule threshold is met
+  private async evaluateRuleThreshold(rule: ThreatRule, bufferKey: string): Promise<RuleMatch | null> {
+    // Prevent rule spam - don't trigger same rule within 30 seconds
+    const lastTriggered = this.triggeredRules.get(rule.ruleId);
+    if (lastTriggered && Date.now() - lastTriggered.getTime() < 30000) {
+      return null;
+    }
 
-    const { field, operator, threshold, timeWindow } = rule.aggregation;
+    if (!rule.aggregation) {
+      // Non-aggregation rule - trigger immediately on match
+      return {
+        rule,
+        matchedData: { immediate: true },
+        timestamp: new Date(),
+        confidence: rule.confidence || 80,
+      };
+    }
+
+    const { operator, threshold, timeWindow } = rule.aggregation;
     const cutoff = new Date(Date.now() - timeWindow * 1000);
-
-    // Get relevant events from buffer
-    const key = `${rule.ruleId}:${field}`;
-    const events = this.eventBuffer.get(key) || [];
+    const events = this.eventBuffer.get(bufferKey) || [];
     const recentEvents = events.filter(e => e.timestamp >= cutoff);
 
     let aggregatedValue: number = 0;
@@ -95,16 +111,19 @@ class SIEMService extends EventEmitter {
         break;
       case 'sum':
         aggregatedValue = recentEvents.reduce((sum, e) => {
-          const value = this.extractFieldValue(e, field);
+          const value = this.extractFieldValue(e, rule.aggregation!.field);
           return sum + (typeof value === 'number' ? value : 0);
         }, 0);
         break;
-      // Add other operators as needed
       default:
         aggregatedValue = recentEvents.length;
     }
 
+    logger.debug(`[SIEM] Rule ${rule.name}: ${aggregatedValue}/${threshold} events (key: ${bufferKey})`);
+
     if (aggregatedValue >= threshold) {
+      logger.warn(`[SIEM] 🚨 RULE TRIGGERED: ${rule.name} - ${aggregatedValue} events >= threshold ${threshold}`);
+      
       return {
         rule,
         matchedData: {
@@ -112,6 +131,7 @@ class SIEMService extends EventEmitter {
           threshold,
           eventCount: recentEvents.length,
           timeWindow,
+          bufferKey,
           events: recentEvents.slice(-10), // Last 10 events
         },
         timestamp: new Date(),
@@ -122,29 +142,14 @@ class SIEMService extends EventEmitter {
     return null;
   }
 
-  // private evaluateEvents() {
-  //   for (const rule of this.rules.values()) {
-  //     if (!rule.enabled) continue;
-
-  //     const relevantEvents = this.getRelevantEvents(rule);
-      
-  //     // Add this debug log:
-  //     if (relevantEvents.length > 0) {
-  //       console.log(`[SIEM] Rule ${rule.ruleId}: ${relevantEvents.length} relevant events`);
-  //     }
-
-  //     if (this.shouldTriggerRule(rule, relevantEvents)) {
-  //       console.log(`[SIEM] 🚨 Rule triggered: ${rule.name}`); // Add this
-  //       this.triggerRule(rule, relevantEvents);
-  //     }
-  //   }
-  // }
-
   // Handle rule match
   private async handleRuleMatch(match: RuleMatch): Promise<void> {
     const { rule, matchedData } = match;
 
     logger.warn(`Rule triggered: ${rule.name} [${rule.severity}]`);
+
+    // Track triggered rule to prevent spam
+    this.triggeredRules.set(rule.ruleId, new Date());
 
     // Update rule trigger count
     rule.lastTriggered = new Date();
@@ -224,32 +229,10 @@ class SIEMService extends EventEmitter {
   }
 
   // Buffer management for aggregation
-  private addToBuffer(event: SecurityEvent): void {
-    const keys = this.getBufferKeys(event);
-    keys.forEach(key => {
-      const buffer = this.eventBuffer.get(key) || [];
-      buffer.push(event);
-      this.eventBuffer.set(key, buffer);
-    });
-  }
-
-  private getBufferKeys(event: SecurityEvent): string[] {
-    const keys: string[] = [];
-    
-    // Add keys for common aggregation fields
-    if (event.source.ip) {
-      keys.push(`ip:${event.source.ip}`);
-    }
-    if (event.source.userId) {
-      keys.push(`user:${event.source.userId}`);
-    }
-    if (event.source.carId) {
-      keys.push(`car:${event.source.carId}`);
-    }
-    keys.push(`category:${event.category}`);
-    keys.push(`severity:${event.severity}`);
-
-    return keys;
+  private addToBuffer(key: string, event: SecurityEvent): void {
+    const buffer = this.eventBuffer.get(key) || [];
+    buffer.push(event);
+    this.eventBuffer.set(key, buffer);
   }
 
   private setupAggregationCleanup(): void {
