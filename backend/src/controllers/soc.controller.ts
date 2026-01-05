@@ -204,34 +204,6 @@ export class SOCController {
       res.status(500).json({ error: error.message });
     }
   }
-
-  async getDebugInfo(req: Request, res: Response): Promise<void> {
-    try {
-      const bufferStats = siemService.getBufferStats();
-      const rules = siemService.getRules();
-      const metrics = securityService.getSecurityMetrics();
-      const blockedIPs = securityService.getBlockedIPs();
-      
-      res.json({
-        success: true,
-        debug: {
-          buffer: bufferStats,
-          rulesStatus: rules.map(r => ({
-            ruleId: r.ruleId,
-            name: r.name,
-            enabled: r.enabled,
-            triggerCount: r.triggerCount,
-            lastTriggered: r.lastTriggered,
-          })),
-          totalEvents: metrics.totalEvents,
-          criticalEvents: metrics.criticalEvents,
-          blockedIPs,
-        }
-      });
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
-    }
-  }
 }
 
 export const socController = new SOCController();

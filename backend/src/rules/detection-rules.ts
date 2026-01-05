@@ -88,13 +88,13 @@ export const detectionRules: ThreatRule[] = [
     name: 'Payment Fraud Attempt',
     description: 'Attempt to start parking without completing payment',
     enabled: true,
-    severity: 'high',
+    severity: 'critical',
     category: 'payment_fraud',
     conditions: [
       {
         field: 'category',
         operator: 'equals',
-        value: 'payment',
+        value: 'payment_fraud',
       },
       {
         field: 'details.fraud_attempt',
@@ -104,8 +104,9 @@ export const detectionRules: ThreatRule[] = [
     ],
     actions: [
       { type: 'alert', priority: 1 },
-      { type: 'log' },
+      { type: 'block_ip' },
       { type: 'create_incident' },
+      { type: 'log' },
     ],
     createdAt: new Date(),
     updatedAt: new Date(),
@@ -115,13 +116,13 @@ export const detectionRules: ThreatRule[] = [
     tags: ['payment', 'fraud'],
   },
 
-  // 4. API Rate Limit Violation
+  // 4. API Rate Limit Violation (DDoS)
   {
     ruleId: 'RULE-004',
-    name: 'API Rate Limit Violation',
-    description: 'Excessive API requests from a single source',
+    name: 'API Rate Limit Violation (DDoS)',
+    description: 'Excessive API requests from a single source - possible DDoS attack',
     enabled: true,
-    severity: 'medium',
+    severity: 'high',
     category: 'api_abuse',
     conditions: [
       {
@@ -137,8 +138,9 @@ export const detectionRules: ThreatRule[] = [
       timeWindow: 60, // 1 minute
     },
     actions: [
-      { type: 'alert' },
-      { type: 'throttle' },
+      { type: 'alert', priority: 1 },
+      { type: 'block_ip' },
+      { type: 'create_incident' },
       { type: 'log' },
     ],
     createdAt: new Date(),
