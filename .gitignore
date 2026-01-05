@@ -55,3 +55,4 @@ load-test-*.json
 
 # Docker
 docker-compose.override.yml
+rapport-video/*.mp4
