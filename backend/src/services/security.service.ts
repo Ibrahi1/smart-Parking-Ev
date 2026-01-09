@@ -3,6 +3,7 @@
 import { SecurityEvent, ThreatIndicator, SecurityMetrics } from '../models/SecurityEvent';
 import { logger } from '../config/logger';
 import { EventEmitter } from 'events';
+import { aiAnalysisService } from './ai-analysis.service';
 
 class SecurityService extends EventEmitter {
   private events: SecurityEvent[] = [];
@@ -51,6 +52,11 @@ class SecurityService extends EventEmitter {
     if (this.events.length > this.maxEvents) {
       this.events = this.events.slice(-this.maxEvents);
     }
+
+    // In recordEvent method, after recording:
+    aiAnalysisService.analyzeEvent(event).catch(err => {
+      logger.error('Error sending to AI:', err);
+    });
 
     return securityEvent;
   }

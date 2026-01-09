@@ -7,6 +7,7 @@ import { parkingAPI, carAPI, reservationAPI, metricsAPI } from './services/api';
 import wsService from './services/websocket';
 import { Place, Car, Transaction, Reservation, Parking } from './types';
 import SOCDashboard from './components/SOCDashboard';
+// import AIAnalysisDashboard from './components/AIAnalysisDashboard';
 
 function App() {
   const [places, setPlaces] = useState<Place[]>([]);
@@ -611,6 +612,7 @@ function App() {
       >
         🛡️ SOC Dashboard
       </button>
+      {/* <button onClick={() => setActiveTab('ai')}>🤖 AI Analysis</button> */}
     </div>
 
     {/* Parking Tab Content */}
@@ -759,6 +761,8 @@ function App() {
     {activeTab === 'soc' && (
       <SOCDashboard />
     )}
+
+    {/* {activeTab === 'ai' && <AIAnalysisDashboard />} */}
   </div>
   );
 }

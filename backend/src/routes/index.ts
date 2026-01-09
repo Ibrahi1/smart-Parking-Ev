@@ -1,5 +1,7 @@
 import { Router } from 'express';
 import socRoutes from './soc.routes';
+import aiAnalysisRoutes from './ai-analysis.routes';
+
 import {
   parkingController,
   carController,

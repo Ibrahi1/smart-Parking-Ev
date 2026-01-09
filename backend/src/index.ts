@@ -14,6 +14,7 @@ import { siemService } from './services/siem.service';
 import { alertService } from './services/alert.service';
 import { incidentService } from './services/incident.service';
 import { socLogger } from './middleware/soc-logger';
+import { aiAnalysisService } from './services/ai-analysis.service';
 
 // Load environment variables
 dotenv.config();
@@ -95,6 +96,12 @@ async function initialize() {
 
     incidentService.on('incidentCreated', (incident) => {
       io.emit('incidentCreated', incident);
+    });
+
+    // aiAnalysisService.setWebhookUrl('http://localhost:5678/webhook/soc-events');
+    aiAnalysisService.setWebhookUrl('http://localhost:5678/webhook-test/soc-events');
+    aiAnalysisService.on('analysisCompleted', (analysis) => {
+      io.emit('aiAnalysisCompleted', analysis);
     });
     
     // Create logs directory

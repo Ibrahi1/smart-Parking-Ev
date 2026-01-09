@@ -1,0 +1,123 @@
+{
+  "name": "SOC AI Analysis",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "soc-events",
+        "options": {}
+      },
+      "id": "webhook-1",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [240, 300],
+      "webhookId": "soc-webhook"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://172.22.48.1:1234/v1/chat/completions",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"mistralai/mistral-7b-instruct-v0.3\",\n  \"messages\": [\n    {\n      \"role\": \"user\",\n      \"content\": \"Analyze this security event and respond ONLY with valid JSON (no markdown, no extra text):\\n\\nEvent: {{ $json.title }}\\nDescription: {{ $json.description }}\\nSeverity: {{ $json.severity }}\\nCategory: {{ $json.category }}\\n\\nRespond in this EXACT format:\\n{\\n  \\\"threat_level\\\": \\\"Low/Medium/High/Critical\\\",\\n  \\\"recommended_action\\\": \\\"specific action\\\",\\n  \\\"explanation\\\": \\\"brief explanation\\\",\\n  \\\"requires_immediate_attention\\\": true/false\\n}\"\n    }\n  ],\n  \"temperature\": 0.3,\n  \"max_tokens\": 300\n}",
+        "options": {}
+      },
+      "id": "http-1",
+      "name": "Call LM Studio",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get the AI response\nconst response = $input.first().json;\nconst aiText = response.choices[0].message.content;\nconst originalEvent = $('Webhook').first().json;\n\n// Try to parse JSON\nlet analysis;\ntry {\n  // Remove markdown code blocks if present\n  const cleaned = aiText.replace(/```json\\n|```\\n|```/g, '').trim();\n  analysis = JSON.parse(cleaned);\n} catch (e) {\n  // Fallback parsing\n  analysis = {\n    threat_level: 'Medium',\n    recommended_action: 'Review manually',\n    explanation: 'AI response parsing failed: ' + aiText.substring(0, 100),\n    requires_immediate_attention: false\n  };\n}\n\nreturn {\n  eventId: originalEvent.eventId,\n  originalEvent: originalEvent,\n  aiAnalysis: analysis,\n  rawAiResponse: aiText,\n  analyzedAt: new Date().toISOString(),\n  model: 'mistralai/mistral-7b-instruct-v0.3'\n};"
+      },
+      "id": "code-1",
+      "name": "Parse Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://host.docker.internal:3001/api/soc/ai-analysis",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json }}",
+        "options": {}
+      },
+      "id": "http-2",
+      "name": "Send to Backend",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { success: true, eventId: $json.eventId, threat_level: $json.aiAnalysis.threat_level } }}"
+      },
+      "id": "respond-1",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1120, 300]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Call LM Studio",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call LM Studio": {
+      "main": [
+        [
+          {
+            "node": "Parse Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Response": {
+      "main": [
+        [
+          {
+            "node": "Send to Backend",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send to Backend": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 0,
+  "updatedAt": "2026-01-04T12:00:00.000Z"
+}

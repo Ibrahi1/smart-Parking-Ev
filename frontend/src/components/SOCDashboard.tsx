@@ -81,10 +81,10 @@ const SOCDashboard: React.FC = () => {
           <div style={styles.statValue}>{incidents.filter(i => i.status === 'open').length}</div>
           <div style={styles.statLabel}>Open Incidents</div>
         </div>
-        <div style={{...styles.statCard, borderLeft: '4px solid #10b981'}}>
+        {/* <div style={{...styles.statCard, borderLeft: '4px solid #10b981'}}>
           <div style={styles.statValue}>{blockedIPs.length}</div>
           <div style={styles.statLabel}>Blocked IPs</div>
-        </div>
+        </div> */}
       </div>
 
       {/* Main Content - Two Columns */}
@@ -92,7 +92,7 @@ const SOCDashboard: React.FC = () => {
         {/* Left Panel - Blocked IPs & Threats */}
         <div style={styles.leftPanel}>
           {/* Blocked IPs */}
-          <div style={styles.panel}>
+          {/* <div style={styles.panel}>
             <div style={styles.panelHeader}>
               <h2 style={styles.panelTitle}>🚫 Blocked IPs</h2>
               <span style={styles.badge}>{blockedIPs.length}</span>
@@ -114,7 +114,7 @@ const SOCDashboard: React.FC = () => {
                 ))
               )}
             </div>
-          </div>
+          </div> */}
 
           {/* Threat Indicators */}
           <div style={styles.panel}>
